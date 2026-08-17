@@ -1,117 +1,139 @@
-import { LightningElement, wire } from 'lwc';
-import getPartnerDeals from '@salesforce/apex/PartnerDealController.getPartnerDeals';
+import { LightningElement, wire } from "lwc";
+import getPartnerDeals from "@salesforce/apex/PartnerDealController.getPartnerDeals";
 
 const COLUMNS = [
-   {
-    label: 'Deal Name',
-    fieldName: 'recordUrl',
-    type: 'url',
+  {
+    label: "Deal Name",
+    fieldName: "recordUrl",
+    type: "url",
     typeAttributes: {
-        label: {
-            fieldName: 'Name'
-        },
-        target: '_self'
+      label: {
+        fieldName: "Name"
+      },
+      target: "_self"
     }
-},
-    {
-    label: 'Status',
-    fieldName: 'Status__c'
-},
-{
-    label: 'Approval Status',
-    fieldName: 'Approval_Status__c'
-},
-{
-    label: 'Deal Amount',
-    fieldName: 'Deal_Amount__c',
-    type: 'currency'
-},
-{
-    label: 'Submitted Date',
-    fieldName: 'Submitted_Date__c',
-    type: 'date'
-},
-    {
-        label: 'Customer',
-        fieldName: 'customerName'
-    }
+  },
+  {
+    label: "Status",
+    fieldName: "Status__c"
+  },
+  {
+    label: "Approval Status",
+    fieldName: "Approval_Status__c"
+  },
+  {
+    label: "Deal Amount",
+    fieldName: "Deal_Amount__c",
+    type: "currency",
+    sortable: true
+  },
+  {
+    label: "Submitted Date",
+    fieldName: "Submitted_Date__c",
+    type: "date"
+  },
+  {
+    label: "Customer",
+    fieldName: "customerName"
+  }
 ];
 
 export default class PartnerDealList extends LightningElement {
+  deals = [];
+  filteredDeals = [];
 
-    deals = [];
-    filteredDeals = [];
+  error;
+  isLoading = true;
 
-    error;
-    isLoading = true;
+  sortedBy;
+  sortDirection = "asc";
 
-    searchKey = '';
-    selectedStatus = 'All';
+  searchKey = "";
+  selectedStatus = "All";
 
-    columns = COLUMNS;
+  columns = COLUMNS;
 
-    statusOptions = [
-        { label: 'All', value: 'All' },
-        { label: 'Submitted', value: 'Submitted' },
-        { label: 'Under Review', value: 'Under Review' },
-        { label: 'Approved', value: 'Approved' },
-        { label: 'Rejected', value: 'Rejected' }
-    ];
+  statusOptions = [
+    { label: "All", value: "All" },
+    { label: "Submitted", value: "Submitted" },
+    { label: "Under Review", value: "Under Review" },
+    { label: "Approved", value: "Approved" },
+    { label: "Rejected", value: "Rejected" }
+  ];
 
-    @wire(getPartnerDeals)
-    wiredDeals({ data, error }) {
+  @wire(getPartnerDeals)
+  wiredDeals({ data, error }) {
+    this.isLoading = false;
 
-        this.isLoading = false;
+    if (data) {
+      this.deals = data.map((deal) => ({
+        ...deal,
+        recordUrl: "partner-deal?id=" + deal.Id,
+        customerName: deal.Customer_Account__r
+          ? deal.Customer_Account__r.Name
+          : ""
+      }));
 
-        if (data) {
-
-  this.deals = data.map(deal => ({
-    ...deal,
-    recordUrl: 'partner-deal?id=' + deal.Id,
-    customerName: deal.Customer_Account__r
-        ? deal.Customer_Account__r.Name
-        : ''
-}));
-
-            this.filteredDeals = this.deals;
-            this.error = undefined;
-
-        } else if (error) {
-
-            this.error = error;
-            this.deals = [];
-            this.filteredDeals = [];
-        }
+      this.filteredDeals = this.deals;
+      this.error = undefined;
+    } else if (error) {
+      this.error = error;
+      this.deals = [];
+      this.filteredDeals = [];
     }
+  }
 
-    handleSearch(event) {
+  handleSearch(event) {
+    this.searchKey = event.target.value.toLowerCase();
 
-        this.searchKey = event.target.value.toLowerCase();
+    this.applyFilters();
+  }
 
-        this.applyFilters();
-    }
+  handleStatusChange(event) {
+    this.selectedStatus = event.detail.value;
 
-    handleStatusChange(event) {
+    this.applyFilters();
+  }
 
-        this.selectedStatus = event.detail.value;
+  handleSort(event) {
+    this.sortedBy = event.detail.fieldName;
+    this.sortDirection = event.detail.sortDirection;
 
-        this.applyFilters();
-    }
+    const data = [...this.filteredDeals];
 
-    applyFilters() {
+    data.sort((a, b) => {
+      let valueA = a[this.sortedBy] ?? "";
+      let valueB = b[this.sortedBy] ?? "";
 
-        this.filteredDeals = this.deals.filter(deal => {
+      if (typeof valueA === "string") {
+        valueA = valueA.toLowerCase();
+        valueB = valueB.toLowerCase();
+      }
 
-            const matchesSearch =
-                !this.searchKey ||
-                (deal.Name &&
-                    deal.Name.toLowerCase().includes(this.searchKey));
+      let result = 0;
 
-            const matchesStatus =
-                this.selectedStatus === 'All' ||
-                deal.Status__c === this.selectedStatus;
+      if (valueA > valueB) {
+        result = 1;
+      } else if (valueA < valueB) {
+        result = -1;
+      }
 
-            return matchesSearch && matchesStatus;
-        });
-    }
+      return this.sortDirection === "asc" ? result : -result;
+    });
+
+    this.filteredDeals = data;
+  }
+
+  applyFilters() {
+    this.filteredDeals = this.deals.filter((deal) => {
+      const matchesSearch =
+        !this.searchKey ||
+        (deal.Name && deal.Name.toLowerCase().includes(this.searchKey));
+
+      const matchesStatus =
+        this.selectedStatus === "All" || deal.Status__c === this.selectedStatus;
+
+      return matchesSearch && matchesStatus;
+    });
+  }
 }
